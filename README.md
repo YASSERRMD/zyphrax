@@ -207,26 +207,27 @@ const original = decompress(compressed);
 
 ## Performance
 
-*(Measured on Apple M1 ARM64)*
+Benchmarks measured on Apple M1 ARM64 (50MB data, 5 iterations):
 
-### Single-Threaded Throughput
+### Compression (Single-Threaded)
 
-| Data Type            | Speed      | Ratio       | Notes |
-|----------------------|------------|-------------|-------|
-| JSON (Large)         | 0.45 GB/s  | 11.8 : 1    | Structured logs |
-| Text (Repetitive)    | 4.40 GB/s  | 84.0 : 1    | Highly compressible |
-| Binary (Large)       | 0.08 GB/s  | 3.8 : 1     | Unaligned binary data |
-| Random (Adversarial) | 0.10 GB/s  | 1.0 : 1     | Safe fallback (no expansion) |
-| JSON (4KB Blocks)    | 0.29 GB/s  | 5.3 : 1     | High overhead scenario |
+| Data Type          | Speed      | Ratio       |
+|--------------------|------------|-------------|
+| JSON (Large)       | 0.42 GB/s  |  9.9 : 1    |
+| Text (Large)       | 3.57 GB/s  | 63.1 : 1    |
+| Binary (Large)     | 0.07 GB/s  |  3.4 : 1    |
+| Random (Adversarial)| 0.07 GB/s |  1.0 : 1    |
+| JSON (4KB Blocks)  | 0.26 GB/s  |  4.9 : 1    |
 
-### Scalability (JSON)
+### Multi-threaded Scaling
 
-| Threads | Aggregate Throughput | Scaling |
-|---------|----------------------|---------|
-| 1       | 0.45 GB/s            | 1.0x    |
-| 4       | 1.84 GB/s            | 4.1x    |
+| Configuration      | Throughput  |
+|--------------------|-------------|
+| 4 Threads (JSON)   | 1.54 GB/s   |
 
-> Note: Performance depends on block size and compressibility.
+> [!WARNING]
+> **Decompression is not yet functional.** The Huffman decoder is still under development.
+> Full round-trip support is planned for a future release.
 
 ---
 
