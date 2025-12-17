@@ -205,11 +205,11 @@ const original = decompress(compressed);
 
 ---
 
-## Performance
+## Performance (Synthetic Benchmarks, Single-Threaded)
 
-Benchmarks measured on Apple M1 ARM64 (50MB data, 5 iterations):
+Timing measured using CPU-time over 5 iterations on 50 MB datasets (Apple M1 ARM64).
 
-### Compression (Single-Threaded)
+### Compression
 
 | Data Type            | Speed      | Ratio       |
 |----------------------|------------|-------------|
@@ -219,11 +219,13 @@ Benchmarks measured on Apple M1 ARM64 (50MB data, 5 iterations):
 | Random (Adversarial) | 0.08 GB/s  |  1.0 : 1    |
 | JSON (4KB Blocks)    | 0.24 GB/s  |  4.9 : 1    |
 
-### Decompression (Single-Threaded)
+### Decompression
 
 | Data Type          | Speed      |
 |--------------------|------------|
 | JSON (Large)       | 0.99 GB/s  |
+
+Decompression verified byte-for-byte against original input.
 
 ### Multi-threaded Scaling
 
