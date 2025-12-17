@@ -1,0 +1,5 @@
+| Data Type | Compression Speed | Compression Ratio (Avg) |
+|-----------|-------------------|-------------------------|
+| JSON Logs  | ~0.46 GB/s       | 11.80 : 1               |
+| Binary     | ~0.08 GB/s       | 3.78 : 1               |
+| Text       | ~0.11 GB/s       | 11.68 : 1               |
