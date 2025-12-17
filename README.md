@@ -125,13 +125,13 @@ fn main() {
 
 ## Performance
 
-*(Measured on Apple M1 Max / AVX2 x86_64)*
+*(Measured on Apple M1 ARM64 (Single Thread))*
 
 | Data Type | Compression Speed | Compression Ratio (Avg) |
 |-----------|-------------------|-------------------------|
-| JSON Logs | ~2.8 GB/s         | 2.5 : 1                 |
-| Binary    | ~3.1 GB/s         | 1.8 : 1                 |
-| Text      | ~2.5 GB/s         | 2.2 : 1                 |
+| JSON Logs | ~0.46 GB/s        | 11.80 : 1               |
+| Binary    | ~0.08 GB/s        | 3.78 : 1                |
+| Text      | ~0.11 GB/s        | 11.68 : 1               |
 
 > Note: Performance depends on block size and compressibility.
 
