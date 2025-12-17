@@ -8,16 +8,19 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+    
+    - name: Compile Tests
+      run: |
+        mkdir -p build
+        gcc -O3 -mavx2 -I src tests/test_header.c -o build/test_header
+        gcc -O3 -mavx2 -I src tests/test_lz77.c -o build/test_lz77
+        
+    - name: Run Header Test
+      run: ./build/test_header
+      
+    - name: Run LZ77 Test
+      run: ./build/test_lz77

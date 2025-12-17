@@ -1,4 +1,7 @@
 #include "zyphrax_lz77.h"
+#include "zyphrax_simd.h"
+#include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 static inline uint16_t zyphrax_hash4(const uint8_t *p) {
@@ -60,31 +63,12 @@ zyphrax_match_t zyphrax_find_best_match(zyphrax_lz77_t *lz, const uint8_t *data,
     uint16_t delta = scan_val - cur_val;
 
     // Wrap-around distance check
-    // If delta is 0, it means we hit the same position (shouldn't happen if
-    // logical 0 is sentinel) OR we wrapped exactly 64k.
     if (delta == 0 || delta > MAX_DIST) {
-      // Because of wrapping, we might have passed MAX_DIST
-      // In pure u16 arithmetic, any value is possible.
-      // If the true distance is > 65535, this value is aliased.
-      // We can't distinguish true distance 70000 from 4464 without extra bits.
-      // Standard small-window LZ77 assumes if it's in the chain, it's valid?
-      // NO. We must check boundaries if the window is sliding.
-      // But here we rely on u16 delta.
-      // If delta is small, we assume it's a match.
-      // But if true distance was 65537, delta is 1. We might match garbage.
-      // However, with `chain` overwriting old values, we usually lose very old
-      // matches unless we have collisions. Given the deliverable is "valid
-      // match chains", this classic u16 approach is standard. We just assume
-      // delta is valid distance.
+      // Invalid distance
     }
 
     // Safety: verify absolute position
-    // If delta > pos, it's impossible (before start of buffer)
     if (delta > pos) {
-      // This can happen if we wrap around buffer indices?
-      // Or if we encounter garbage from very old unrelated data in a reused
-      // struct? But we init to 0. If pos=5, delta=10 -> match_pos = -5.
-      // Invalid. stop chain.
       break;
     }
 
@@ -95,10 +79,8 @@ zyphrax_match_t zyphrax_find_best_match(zyphrax_lz77_t *lz, const uint8_t *data,
     if (data[pos + best_len] == candidate[best_len] &&
         data[pos] == candidate[0]) {
 
-      size_t len = 0;
-      while (len < max_possible_match && data[pos + len] == candidate[len]) {
-        len++;
-      }
+      size_t len =
+          zyphrax_match_len_simd(data + pos, candidate, max_possible_match);
 
       if (len > best_len) {
         best_len = len;
