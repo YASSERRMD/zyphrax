@@ -1,0 +1,7 @@
+*.o
+*.a
+*.so
+*.dylib
+test_header
+tests/test_header
+.DS_Store
