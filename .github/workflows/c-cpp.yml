@@ -16,7 +16,7 @@ jobs:
     - name: Compile Tests
       run: |
         mkdir -p build
-        gcc -O3 -mavx2 -I src tests/test_header.c src/zyphrax.c src/zyphrax_block.c src/zyphrax_lz77.c src/zyphrax_simd.c src/zyphrax_seq.c src/zyphrax_huff.c src/zyphrax_dec.c -o build/test_header
+        gcc -O3 -mavx2 -I src tests/test_header.c src/zyphrax_block.c src/zyphrax_lz77.c src/zyphrax_simd.c src/zyphrax_seq.c src/zyphrax_huff.c src/zyphrax_dec.c -o build/test_header
         gcc -O3 -mavx2 -I src tests/test_lz77.c src/zyphrax_simd.c -o build/test_lz77
         
     - name: Run Header Test
