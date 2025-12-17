@@ -1,5 +1,9 @@
-| Data Type | Compression Speed | Compression Ratio (Avg) |
-|-----------|-------------------|-------------------------|
-| JSON Logs  | ~0.46 GB/s       | 11.80 : 1               |
-| Binary     | ~0.08 GB/s       | 3.78 : 1               |
-| Text       | ~0.11 GB/s       | 11.68 : 1               |
+| Benchmark Category   | Speed      | Ratio       |
+|----------------------|------------|-------------|
+| JSON (Large)       |  0.45 GB/s | 11.80 : 1 |
+| Binary (Large)     |  0.08 GB/s |  3.78 : 1 |
+| Text (Large)       |  4.40 GB/s | 84.02 : 1 |
+| Random (Adversarial) |  0.10 GB/s |  1.00 : 1 |
+| JSON (4KB Blocks)  |  0.29 GB/s |  5.32 : 1 |
+| Decompression (JSON) | 122070.31 GB/s |     -       |
+| Thread Scale (x4)  |  1.84 GB/s |     -       |
