@@ -176,8 +176,11 @@ static inline uint16_t decode_sym(z_bit_reader *br,
 
 static size_t read_start_extra(z_bit_reader *br) {
   size_t val = 0;
-  while (1) {
+  int max_iter = 100; // Safety limit
+  while (max_iter-- > 0) {
     refill_bits(br);
+    if (br->ptr >= br->end && br->bit_count < 8)
+      break; // No more data
     uint8_t b = read_bits(br, 8);
     val += b;
     if (b < 255)
@@ -226,12 +229,18 @@ size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
 
     // Compressed Block
     // 1. Read OrigSize (4 bytes little-endian)
-    if (in + 4 > in_end)
+    if (in + 8 > in_end)
       return 0;
     uint32_t orig_size = in[0] | (in[1] << 8) | (in[2] << 16) | (in[3] << 24);
     in += 4;
+    // 2. Read CompSize (4 bytes little-endian)
+    uint32_t comp_size = in[0] | (in[1] << 8) | (in[2] << 16) | (in[3] << 24);
+    in += 4;
 
-    // 2. Read Tables
+    // Remember block data start
+    const uint8_t *block_data_start = in;
+
+    // 3. Read Tables
     // [Token:128][Lit:128][Off:128] = 384 bytes
     if (in + 384 > in_end)
       return 0;
@@ -269,8 +278,8 @@ size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
     uint8_t *block_start = out;
 
     while ((size_t)(out - block_start) < orig_size) {
-      // Safety check input
-      if (br.ptr > br.end && br.bit_count < 8)
+      // Safety: exit if input exhausted
+      if (br.ptr >= br.end && br.bit_count < 15)
         break;
 
       // Decode Token
@@ -294,12 +303,9 @@ size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
         break;
 
       // Match - ml = t_ml + 3, plus extra if t_ml==15
+      // Order: Offset FIRST, then Extra Match Len
       if (t_ml > 0) {
-        size_t ml = t_ml + 3;
-        if (t_ml == 15)
-          ml += read_start_extra(&br);
-
-        // Offset
+        // Offset first
         uint8_t off_hi = (uint8_t)decode_sym(&br, &off_dec);
         refill_bits(&br);
         uint8_t off_lo = (uint8_t)read_bits(&br, 8);
@@ -307,6 +313,11 @@ size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
 
         if (offset == 0)
           return 0; // Error
+
+        // Match length
+        size_t ml = t_ml + 3;
+        if (t_ml == 15)
+          ml += read_start_extra(&br);
 
         // Execute Match
         if (out + ml > out_end)
@@ -322,8 +333,8 @@ size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
       }
     }
 
-    // Sync reader (approximate - advance to next block boundary)
-    in = br.ptr;
+    // Skip to next block using exact compressed size
+    in = block_data_start + comp_size;
   }
 
   return out - dst;
