@@ -125,13 +125,24 @@ fn main() {
 
 ## Performance
 
-*(Measured on Apple M1 ARM64 (Single Thread))*
+*(Measured on Apple M1 ARM64)*
 
-| Data Type | Compression Speed | Compression Ratio (Avg) |
-|-----------|-------------------|-------------------------|
-| JSON Logs | ~0.46 GB/s        | 11.80 : 1               |
-| Binary    | ~0.08 GB/s        | 3.78 : 1                |
-| Text      | ~0.11 GB/s        | 11.68 : 1               |
+### Single-Threaded Throughput
+
+| Data Type            | Speed      | Ratio       | Notes |
+|----------------------|------------|-------------|-------|
+| JSON (Large)         | 0.45 GB/s  | 11.8 : 1    | Structured logs |
+| Text (Repetitive)    | 4.40 GB/s  | 84.0 : 1    | Highly compressible |
+| Binary (Large)       | 0.08 GB/s  | 3.8 : 1     | Unaligned binary data |
+| Random (Adversarial) | 0.10 GB/s  | 1.0 : 1     | Safe fallback (no expansion) |
+| JSON (4KB Blocks)    | 0.29 GB/s  | 5.3 : 1     | High overhead scenario |
+
+### Scalability (JSON)
+
+| Threads | Aggregate Throughput | Scaling |
+|---------|----------------------|---------|
+| 1       | 0.45 GB/s            | 1.0x    |
+| 4       | 1.84 GB/s            | 4.1x    |
 
 > Note: Performance depends on block size and compressibility.
 
