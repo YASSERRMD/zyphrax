@@ -1,4 +1,5 @@
 #include "zyphrax.h"
+#include "zyphrax_block.h"
 #include <string.h>
 
 // Internal helper to write 32-bit LE
@@ -19,23 +20,7 @@ static uint32_t read_u32_le(const uint8_t *p) {
 // Header Implementation
 // -------------------------------------------------------------------------
 
-// Header size is fixed 12 bytes
 #define HEADER_SIZE 12
-
-// Flags packing:
-// [reserved:3][raw_block:1][checksum:1][level:3]
-// We'll put this in the high byte of the 2nd word?
-// Structure:
-// Bytes 0-3: Magic
-// Bytes 4-6: Block Size (24 bits)
-// Byte 7: Flags
-// Bytes 8-11: CRC32 (Header Checksum or reserved for now?)
-
-// Actually, let's follow standard bit packing if we put Flags inside
-// appropriate bits But to keep it simple and aligned: Word 0: Magic Word 1:
-// BlockSize (low 24) | (Flags << 24) Word 2: Checksum (Content checksum? Header
-// checksum? Let's assume header checksum or 0) For Phase 1, we will just write
-// 0 for CRC32 field as we don't have CRC impl yet.
 
 static void build_flags(const zyphrax_params_t *params, uint8_t *flags_out) {
   uint8_t level = (params->level & 0x7);            // 3 bits
@@ -94,33 +79,59 @@ int zyphrax_read_header_internal(const uint8_t *src, zyphrax_params_t *params) {
 
 size_t zyphrax_compress_bound(size_t src_size) {
   // Header (12) + src_size + worst case overhead
-  // Simple bound: src + src/something + 12.
-  // For raw storage worst case: src + header + block_headers needed
+  // For raw storage worst case: src + header + block_headers (1 byte/block?)
   // If block size is 64KB, we have src_size / 64KB blocks.
-  // Each block might need framing?
-  // Let's safe-bound: src + 12 + (src/64 + 1)*16 (block overhead?)
-  // LZ4 uses src + src/255 + 16.
-  return src_size + (src_size / 255) + 64;
+  // Each block has 1 byte overhead for raw flag, plus potentially internal
+  // overhead logic. Huffman overhead is ~384 bytes per block if compressed. But
+  // we fallback to raw if expansion. Raw fallback is: src + 1. So per block
+  // worst case is src_block + 1. Num blocks = (src + 65535) / 65536. Total
+  // overhead = 12 + NumBlocks. Just to be safe: + 64 bytes base + src/255.
+  return src_size + (src_size / 255) + 256;
 }
+
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 size_t zyphrax_compress(const uint8_t *src, size_t src_size, uint8_t *dst,
                         size_t dst_cap, const zyphrax_params_t *params) {
   if (dst_cap < 12)
     return 0;
 
-  zyphrax_write_header_internal(dst, params);
+  // Use defaults if params is NULL? Or assume valid.
+  // Let's copy to local to handle defaults
+  zyphrax_params_t p = *params;
+  if (p.block_size == 0)
+    p.block_size = ZYPHRAX_BLOCK_SIZE;
 
-  // For Phase 1, we don't compress. We just write header and stop.
-  // Or should we copy raw?
-  // "Deliverable: Header read/write functions complete."
-  // It doesn't say "Valid compressor".
-  // I will return 12 (bytes written).
+  uint8_t *out = dst;
+  uint8_t *out_end = dst + dst_cap;
 
-  return 12;
+  zyphrax_write_header_internal(out, &p);
+  out += 12;
+
+  size_t pos = 0;
+  while (pos < src_size) {
+    size_t block_size = min(p.block_size, src_size - pos);
+    size_t rem_cap = out_end - out;
+
+    size_t block_enc =
+        zyphrax_compress_block(src + pos, block_size, out, rem_cap, &p);
+
+    if (block_enc == 0)
+      return 0; // Error / overflow
+
+    out += block_enc;
+    pos += block_size;
+  }
+
+  return out - dst;
 }
 
 size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
                           size_t dst_cap) {
+  // Phase 9: Decompression
+  // For now we just parse header
   if (src_size < 12)
     return 0;
 
@@ -129,7 +140,6 @@ size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
     return 0; // Error
   }
 
-  // For Phase 1, nothing to decompress yet except verifying header.
-  // Return 0 decompressed bytes?
+  // Decompression logic pending (Phase 9)
   return 0;
 }
