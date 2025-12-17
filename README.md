@@ -56,6 +56,31 @@ cargo test
 
 ---
 
+## Installation
+
+### Linux / macOS
+
+Use the provided install script to build and install globally (requires sudo):
+
+```bash
+chmod +x scripts/install_unix.sh
+./scripts/install_unix.sh
+```
+
+By default, it installs to `/usr/local` (lib, include, bin).
+
+### Windows
+
+Run the PowerShell script (requires MinGW/GCC in PATH):
+
+```powershell
+./scripts/install_windows.ps1
+```
+
+This creates `zyphrax.dll`, `libzyphrax.a`, and `zyphrax.exe` in the project root.
+
+---
+
 ## Usage
 
 ### C API
