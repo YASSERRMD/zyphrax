@@ -17,7 +17,7 @@ jobs:
       run: |
         mkdir -p build
         gcc -O3 -mavx2 -I src tests/test_header.c -o build/test_header
-        gcc -O3 -mavx2 -I src tests/test_lz77.c -o build/test_lz77
+        gcc -O3 -mavx2 -I src tests/test_lz77.c src/zyphrax_simd.c -o build/test_lz77
         
     - name: Run Header Test
       run: ./build/test_header
