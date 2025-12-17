@@ -1,20 +1,31 @@
 CC = gcc
-CFLAGS = -O3 -I src
+CFLAGS = -O3 -I src -fPIC
 
-# Detect Arch forflags
+# Architecture Detection
+UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
+
 ifeq ($(UNAME_M),x86_64)
     CFLAGS += -mavx2 -mbmi2
 endif
-# ARM64 usually implied or -march=native
 
 SRC_LIB = src/zyphrax.c src/zyphrax_lz77.c src/zyphrax_simd.c src/zyphrax_seq.c src/zyphrax_huff.c src/zyphrax_block.c src/zyphrax_dec.c
 OBJ_LIB = $(SRC_LIB:.c=.o)
 
-all: lib cli
+# Shared Lib Name
+ifeq ($(UNAME_S),Darwin)
+    SHARED_LIB = libzyphrax.dylib
+else
+    SHARED_LIB = libzyphrax.so
+endif
+
+all: lib shared cli
 
 lib: $(OBJ_LIB)
 	ar rcs libzyphrax.a $(OBJ_LIB)
+
+shared: $(OBJ_LIB)
+	$(CC) -shared -o $(SHARED_LIB) $(OBJ_LIB)
 
 cli: lib src/cli.c
 	$(CC) $(CFLAGS) src/cli.c -L. -lzyphrax -o zyphrax
@@ -41,5 +52,5 @@ test: lib
 	./tests/test_decompress
 
 clean:
-	rm -f src/*.o libzyphrax.a zyphrax
+	rm -f src/*.o libzyphrax.a libzyphrax.so libzyphrax.dylib zyphrax
 	rm -f tests/test_header tests/test_lz77 tests/test_simd tests/test_tokens tests/test_huffman tests/test_block tests/test_api tests/test_decompress
