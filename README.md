@@ -1,5 +1,9 @@
 # Zyphrax Compression Engine
 
+<p align="center">
+  <img src="assets/logo.png" alt="Zyphrax Logo" width="400">
+</p>
+
 Zyphrax is a high-performance, block-based compression engine designed for **high-throughput structured data pipelines**. It combines an LZ77 core, SIMD-accelerated matching, and lightweight Huffman entropy coding in a predictable block format.
 
 Zyphrax is optimized for **speed, low latency, and deterministic behavior**, positioning it between LZ4-class compressors and fast Zstd modes.
