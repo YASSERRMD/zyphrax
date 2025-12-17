@@ -15,6 +15,17 @@ void zyphrax_bw_init(zyphrax_bit_writer_t *bw, uint8_t *buf, size_t cap) {
   bw->end = buf + cap;
 }
 
+// Helper: Bit-reverse a code of given length
+static inline uint32_t bit_reverse(uint32_t code, int len) {
+  uint32_t r = 0;
+  for (int i = 0; i < len; i++) {
+    r = (r << 1) | (code & 1);
+    code >>= 1;
+  }
+  return r;
+}
+
+// Put bits LSB-first (reversed Huffman code for LSB bitstream)
 void zyphrax_bw_put(zyphrax_bit_writer_t *bw, uint32_t value, int bits) {
   // Mask value just in case
   value &= (1 << bits) - 1;
@@ -29,6 +40,12 @@ void zyphrax_bw_put(zyphrax_bit_writer_t *bw, uint32_t value, int bits) {
     bw->bits >>= 8;
     bw->count -= 8;
   }
+}
+
+// Put Huffman code: reverse before writing
+void zyphrax_bw_put_huff(zyphrax_bit_writer_t *bw, uint32_t code, int len) {
+  uint32_t rev = bit_reverse(code, len);
+  zyphrax_bw_put(bw, rev, len);
 }
 
 void zyphrax_bw_flush(zyphrax_bit_writer_t *bw) {
@@ -225,13 +242,22 @@ void zyphrax_build_huffman(zyphrax_huffman_t *hf) {
   }
 }
 
+// Helper for extra len
+static void write_extra_len(zyphrax_bit_writer_t *bw, size_t val) {
+  while (val >= 255) {
+    zyphrax_bw_put(bw, 255, 8);
+    val -= 255;
+  }
+  zyphrax_bw_put(bw, (uint8_t)val, 8);
+}
+
 void zyphrax_analyze_sequences(const zyphrax_sequence_t *seqs, size_t count,
                                zyphrax_huffman_t *lit_hf,
                                zyphrax_huffman_t *off_hf,
-                               zyphrax_huffman_t *mlen_hf) {
+                               zyphrax_huffman_t *token_hf) {
   memset(lit_hf, 0, sizeof(*lit_hf));
   memset(off_hf, 0, sizeof(*off_hf));
-  memset(mlen_hf, 0, sizeof(*mlen_hf));
+  memset(token_hf, 0, sizeof(*token_hf));
 
   for (size_t i = 0; i < count; i++) {
     const zyphrax_sequence_t *s = &seqs[i];
@@ -241,118 +267,100 @@ void zyphrax_analyze_sequences(const zyphrax_sequence_t *seqs, size_t count,
       lit_hf->freq[s->literals[j]]++;
     }
 
-    // Match
-    if (s->match.length >= 4) {
-      // Offset high byte
-      // s->match.offset is u16. High byte:
+    // Token - t_ml=0 means no match, t_ml>=1 means ml = t_ml + 3
+    size_t ll = s->lit_len;
+    size_t ml = s->match.length;
+
+    uint8_t t_ll = (ll >= 15) ? 15 : (uint8_t)ll;
+    uint8_t t_ml = 0;
+    if (ml >= 4) {
+      size_t ml_code = ml - 3; // ml=4 -> t_ml=1, ml=18 -> t_ml=15
+      t_ml = (ml_code >= 15) ? 15 : (uint8_t)ml_code;
+
+      // Offset Freq
       uint8_t off_hi = (s->match.offset >> 8) & 0xFF;
       off_hf->freq[off_hi]++;
-
-      // Match len
-      // 0-255 map to length.
-      // Standard length coding is complex (intervals).
-      // Here prompt says "0-255, representing 4-259".
-      // So we map len-4 to symbol.
-      size_t mlen = s->match.length - 4;
-      if (mlen > 255)
-        mlen = 255;
-      mlen_hf->freq[mlen]++;
     }
+
+    uint8_t token = (t_ll << 4) | t_ml;
+    token_hf->freq[token]++;
   }
 }
 
 // ---------------------------------------------------------------------
-// Encoder
+// Encoder (Interleaved)
 // ---------------------------------------------------------------------
 
 size_t zyphrax_huffman_encode(const zyphrax_sequence_t *seqs, size_t count,
                               uint8_t *dst, size_t dst_cap,
                               const zyphrax_huffman_t *lit_hf,
                               const zyphrax_huffman_t *off_hf,
-                              const zyphrax_huffman_t *mlen_hf) {
+                              const zyphrax_huffman_t *token_hf) {
   zyphrax_bit_writer_t bw;
   zyphrax_bw_init(&bw, dst, dst_cap);
 
-  // Write headers (Tables)?
-  // Prompt:
-  // "[Hdr][LitTree][OffTree][MLenTree][LitStream][OffStream][MLenStream]" We
-  // should encode trees first. Implementing tree serialization is huge. For
-  // now, we will SKIP writing the tree headers and assume fixed/adaptive in
-  // logic? OR we write a simple flat table (256 * 4 bits?). Deliverable says
-  // "60-70% ratio". If we rely on valid storage, we must store trees. Simple
-  // storage: Write 256 bytes of code lengths? That's 256 bytes per tree. 3
-  // trees = 768 bytes overhead. Acceptable for 64KB block? Yes (~1% overhead).
-
-  // Store trees (semi-compressed - 4 bits per len?)
-  // 128 bytes per tree.
+  // 1. Write Tables (Fixed 384 bytes order: Token, Lit, Off)
+  // Token Table (256 codes)
+  for (int i = 0; i < 256; i += 2) {
+    uint8_t n1 = token_hf->code_len[i] & 0xF;
+    uint8_t n2 = token_hf->code_len[i + 1] & 0xF;
+    zyphrax_bw_put(&bw, (n1 << 4) | n2, 8);
+  }
+  // Lit Table
   for (int i = 0; i < 256; i += 2) {
     uint8_t n1 = lit_hf->code_len[i] & 0xF;
     uint8_t n2 = lit_hf->code_len[i + 1] & 0xF;
     zyphrax_bw_put(&bw, (n1 << 4) | n2, 8);
   }
+  // Off Table
   for (int i = 0; i < 256; i += 2) {
     uint8_t n1 = off_hf->code_len[i] & 0xF;
     uint8_t n2 = off_hf->code_len[i + 1] & 0xF;
     zyphrax_bw_put(&bw, (n1 << 4) | n2, 8);
   }
-  for (int i = 0; i < 256; i += 2) {
-    uint8_t n1 = mlen_hf->code_len[i] & 0xF;
-    uint8_t n2 = mlen_hf->code_len[i + 1] & 0xF;
-    zyphrax_bw_put(&bw, (n1 << 4) | n2, 8);
-  }
 
-  // Encode Streams.
-  // "3 streams ... [LitStream][OffStream][MLenStream]"
-  // This implies we write them separately?
-  // If we use one bit writer, we are interleaving bits unless we buffer?
-  // With `dst` pointer we can partition?
-  // But we don't know sizes.
-  // Interleaving is standard for Deflate.
-  // But structure says separate streams.
-  // Writing 3 streams requires 3 writers or buffers.
-  // We will just INTERLEAVE for Phase 5 simplicity unless strict format.
-  // "[LitStream][OffStream][MLenStream]" implies concatenated chunks.
-  // We need intermediate buffers or limits.
-  // Since we are inside a function with `seqs`, we can iterate 3 times!
-
-  // Pass 1: Lit Stream
+  // 2. Interleaved Encode
   for (size_t i = 0; i < count; i++) {
     const zyphrax_sequence_t *s = &seqs[i];
-    for (size_t k = 0; k < s->lit_len; k++) {
-      uint8_t lit = s->literals[k];
-      zyphrax_bw_put(&bw, lit_hf->code[lit], lit_hf->code_len[lit]);
+    size_t ll = s->lit_len;
+    size_t ml = s->match.length;
+
+    // Token - t_ml=0 means no match, t_ml>=1 means ml=t_ml+3
+    uint8_t t_ll = (ll >= 15) ? 15 : (uint8_t)ll;
+    uint8_t t_ml = 0;
+    if (ml >= 4) {
+      size_t ml_code = ml - 3; // ml=4 -> t_ml=1
+      t_ml = (ml_code >= 15) ? 15 : (uint8_t)ml_code;
     }
-  }
-  // Flush/Align?
-  zyphrax_bw_flush(&bw); // align to byte
+    uint8_t token = (t_ll << 4) | t_ml;
+    zyphrax_bw_put_huff(&bw, token_hf->code[token], token_hf->code_len[token]);
 
-  // Pass 2: Offset Stream
-  // Note: Writing raw low byte + Huffman high byte?
-  for (size_t i = 0; i < count; i++) {
-    const zyphrax_sequence_t *s = &seqs[i];
-    if (s->match.length >= 4) {
+    // Extra Lit Len
+    if (t_ll == 15) {
+      write_extra_len(&bw, ll - 15);
+    }
+
+    // Literals
+    for (size_t k = 0; k < ll; k++) {
+      uint8_t lit = s->literals[k];
+      zyphrax_bw_put_huff(&bw, lit_hf->code[lit], lit_hf->code_len[lit]);
+    }
+
+    // Match
+    if (ml >= 4) {
+      // Offset
       uint8_t off_hi = (s->match.offset >> 8) & 0xFF;
       uint8_t off_lo = s->match.offset & 0xFF;
+      zyphrax_bw_put_huff(&bw, off_hf->code[off_hi], off_hf->code_len[off_hi]);
+      zyphrax_bw_put(&bw, off_lo, 8); // Raw low byte
 
-      // Initial design: Huffman encode high byte
-      zyphrax_bw_put(&bw, off_hf->code[off_hi], off_hf->code_len[off_hi]);
-      // Raw low byte
-      zyphrax_bw_put(&bw, off_lo, 8);
+      // Extra Match Len: ml = t_ml + 3 + extra when t_ml==15
+      if (t_ml == 15) {
+        write_extra_len(&bw, ml - 3 - 15);
+      }
     }
   }
-  zyphrax_bw_flush(&bw);
 
-  // Pass 3: Match Len Stream
-  for (size_t i = 0; i < count; i++) {
-    const zyphrax_sequence_t *s = &seqs[i];
-    if (s->match.length >= 4) {
-      size_t mlen = s->match.length - 4;
-      if (mlen > 255)
-        mlen = 255;
-      zyphrax_bw_put(&bw, mlen_hf->code[mlen], mlen_hf->code_len[mlen]);
-    }
-  }
   zyphrax_bw_flush(&bw);
-
   return zyphrax_bw_written(&bw);
 }

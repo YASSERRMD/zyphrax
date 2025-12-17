@@ -119,6 +119,7 @@ void bench_compress(const char *name, void (*gen)(uint8_t *, size_t),
 }
 
 void bench_decompress() {
+  printf("Benchmarking Decompression (JSON)...\n");
   // Generate JSON
   uint8_t *src = malloc(DATA_SIZE);
   gen_json(src, DATA_SIZE);
@@ -127,16 +128,31 @@ void bench_decompress() {
   uint8_t *comp = malloc(bound);
   zyphrax_params_t params = {3, 65536, 0};
   size_t csz = zyphrax_compress(src, DATA_SIZE, comp, bound, &params);
+  printf("Compressed Size: %zu\n", csz);
 
-  uint8_t *dec = malloc(DATA_SIZE * 2); // safety
+  uint8_t *dec = malloc(DATA_SIZE * 2);
 
-  clock_t start = clock();
+  // Integrity Check
+  size_t dsz_check = zyphrax_decompress(comp, csz, dec, DATA_SIZE * 2);
+  if (dsz_check != DATA_SIZE || memcmp(src, dec, DATA_SIZE) != 0) {
+    printf("Integrity Check FAILED! Decompressed size: %zu\n", dsz_check);
+    free(src);
+    free(comp);
+    free(dec);
+    return;
+  }
+  printf("Integrity Check Passed.\n");
+
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+
   for (int i = 0; i < NUM_ITER; i++) {
-    // Assume known size for now or pass ample buffer
     zyphrax_decompress(comp, csz, dec, DATA_SIZE * 2);
   }
-  clock_t end = clock();
-  double secs = (double)(end - start) / CLOCKS_PER_SEC;
+  clock_gettime(CLOCK_MONOTONIC, &end);
+
+  double secs =
+      (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
   double speed = ((double)DATA_SIZE * NUM_ITER) / (1024 * 1024 * 1024.0) / secs;
 
   printf("| %-18s | %5.2f GB/s |     -       |\n", "Decompression (JSON)",

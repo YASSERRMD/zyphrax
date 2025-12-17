@@ -35,7 +35,7 @@ size_t zyphrax_bw_written(const zyphrax_bit_writer_t *bw);
 void zyphrax_analyze_sequences(const zyphrax_sequence_t *seqs, size_t count,
                                zyphrax_huffman_t *lit_hf,
                                zyphrax_huffman_t *off_hf,
-                               zyphrax_huffman_t *mlen_hf);
+                               zyphrax_huffman_t *token_hf);
 
 // Build tree from frequencies (generates code_len and code)
 void zyphrax_build_huffman(zyphrax_huffman_t *hf);
@@ -45,4 +45,4 @@ size_t zyphrax_huffman_encode(const zyphrax_sequence_t *seqs, size_t count,
                               uint8_t *dst, size_t dst_cap,
                               const zyphrax_huffman_t *lit_hf,
                               const zyphrax_huffman_t *off_hf,
-                              const zyphrax_huffman_t *mlen_hf);
+                              const zyphrax_huffman_t *token_hf);

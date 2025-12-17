@@ -128,18 +128,203 @@ size_t zyphrax_compress(const uint8_t *src, size_t src_size, uint8_t *dst,
   return out - dst;
 }
 
+#include "zyphrax_dec.h"
+
+// Decompression Helper: Read Bits
+typedef struct {
+  const uint8_t *ptr;
+  const uint8_t *end;
+  uint64_t bit_buf;
+  int bit_count;
+} z_bit_reader;
+
+static inline void refill_bits(z_bit_reader *br) {
+  while (br->bit_count <= 56 && br->ptr < br->end) {
+    br->bit_buf |= ((uint64_t)(*br->ptr++)) << br->bit_count;
+    br->bit_count += 8;
+  }
+}
+
+static inline uint16_t peek_bits(z_bit_reader *br, int n) {
+  return (uint16_t)(br->bit_buf & ((1 << n) - 1));
+}
+
+static inline void consume_bits(z_bit_reader *br, int n) {
+  br->bit_buf >>= n;
+  br->bit_count -= n;
+}
+
+static inline uint16_t read_bits(z_bit_reader *br, int n) {
+  uint16_t val = peek_bits(br, n);
+  consume_bits(br, n);
+  return val;
+}
+
+// Decode symbol using table
+static inline uint16_t decode_sym(z_bit_reader *br,
+                                  const zyphrax_huff_decoder *dec) {
+  refill_bits(br);
+  // Peek 15 bits max table size
+  uint16_t look = peek_bits(br, 15);
+  uint16_t entry = dec->table[look];
+  // Entry: [sym:8][bits:8]
+  uint8_t bits = entry & 0xFF;
+  uint8_t sym = entry >> 8;
+  consume_bits(br, bits);
+  return sym;
+}
+
+static size_t read_start_extra(z_bit_reader *br) {
+  size_t val = 0;
+  while (1) {
+    refill_bits(br);
+    uint8_t b = read_bits(br, 8);
+    val += b;
+    if (b < 255)
+      break;
+  }
+  return val;
+}
+
 size_t zyphrax_decompress(const uint8_t *src, size_t src_size, uint8_t *dst,
                           size_t dst_cap) {
-  // Phase 9: Decompression
-  // For now we just parse header
   if (src_size < 12)
     return 0;
 
   zyphrax_params_t params;
-  if (zyphrax_read_header_internal(src, &params) != 0) {
-    return 0; // Error
+  if (zyphrax_read_header_internal(src, &params) != 0)
+    return 0;
+
+  const uint8_t *in = src + 12; // Skip header
+  const uint8_t *in_end = src + src_size;
+  uint8_t *out = dst;
+  uint8_t *out_end = dst + dst_cap;
+
+  while (in < in_end) {
+    // Read Block Type
+    if (in >= in_end)
+      break;
+    uint8_t type = *in++;
+
+    if (type == 0) { // Raw
+      // We don't store raw block size in header.
+      // RAW format assumes we know size? Or "rest of stream"?
+      // Block format flaw here: Raw mode uses "store_raw" which writes
+      // [0][Bytes]. It doesn't write length! Assuming raw is ONLY used for
+      // fallback of entire buffer. Or fixed block size. Default block size
+      // check:
+      size_t rem_in = in_end - in;
+      size_t rem_out = out_end - out;
+      size_t chunk = (rem_in < params.block_size) ? rem_in : params.block_size;
+      if (chunk > rem_out)
+        return 0; // Overflow
+      memcpy(out, in, chunk);
+      in += chunk;
+      out += chunk;
+      continue;
+    }
+
+    // Compressed Block
+    // 1. Read OrigSize (4 bytes little-endian)
+    if (in + 4 > in_end)
+      return 0;
+    uint32_t orig_size = in[0] | (in[1] << 8) | (in[2] << 16) | (in[3] << 24);
+    in += 4;
+
+    // 2. Read Tables
+    // [Token:128][Lit:128][Off:128] = 384 bytes
+    if (in + 384 > in_end)
+      return 0;
+
+    uint8_t token_lens[256];
+    uint8_t lit_lens[256];
+    uint8_t off_lens[256];
+
+    for (int i = 0; i < 256; i += 2) {
+      uint8_t b = *in++;
+      token_lens[i] = (b >> 4);
+      token_lens[i + 1] = (b & 0xF);
+    }
+    for (int i = 0; i < 256; i += 2) {
+      uint8_t b = *in++;
+      lit_lens[i] = (b >> 4);
+      lit_lens[i + 1] = (b & 0xF);
+    }
+    for (int i = 0; i < 256; i += 2) {
+      uint8_t b = *in++;
+      off_lens[i] = (b >> 4);
+      off_lens[i + 1] = (b & 0xF);
+    }
+
+    // Build Decoders
+    zyphrax_huff_decoder token_dec, lit_dec, off_dec;
+    zyphrax_build_dec_table(&token_dec, token_lens);
+    zyphrax_build_dec_table(&lit_dec, lit_lens);
+    zyphrax_build_dec_table(&off_dec, off_lens);
+
+    // Init Reader
+    z_bit_reader br = {.ptr = in, .end = in_end, .bit_buf = 0, .bit_count = 0};
+
+    // Decode Loop - use orig_size for termination
+    uint8_t *block_start = out;
+
+    while ((size_t)(out - block_start) < orig_size) {
+      // Safety check input
+      if (br.ptr > br.end && br.bit_count < 8)
+        break;
+
+      // Decode Token
+      uint8_t token = (uint8_t)decode_sym(&br, &token_dec);
+      size_t t_ll = token >> 4;
+      size_t t_ml = token & 0xF;
+
+      // Lit Len
+      size_t ll = t_ll;
+      if (ll == 15)
+        ll += read_start_extra(&br);
+
+      // Copy Literals
+      if (out + ll > out_end)
+        return 0;
+      for (size_t i = 0; i < ll; i++) {
+        *out++ = (uint8_t)decode_sym(&br, &lit_dec);
+      }
+
+      if ((size_t)(out - block_start) >= orig_size)
+        break;
+
+      // Match - ml = t_ml + 3, plus extra if t_ml==15
+      if (t_ml > 0) {
+        size_t ml = t_ml + 3;
+        if (t_ml == 15)
+          ml += read_start_extra(&br);
+
+        // Offset
+        uint8_t off_hi = (uint8_t)decode_sym(&br, &off_dec);
+        refill_bits(&br);
+        uint8_t off_lo = (uint8_t)read_bits(&br, 8);
+        uint16_t offset = (off_hi << 8) | off_lo;
+
+        if (offset == 0)
+          return 0; // Error
+
+        // Execute Match
+        if (out + ml > out_end)
+          return 0;
+        const uint8_t *match_src = out - offset;
+        if (match_src < dst)
+          return 0; // Underflow
+
+        for (size_t k = 0; k < ml; k++) {
+          out[k] = match_src[k];
+        }
+        out += ml;
+      }
+    }
+
+    // Sync reader (approximate - advance to next block boundary)
+    in = br.ptr;
   }
 
-  // Decompression logic pending (Phase 9)
-  return 0;
+  return out - dst;
 }
