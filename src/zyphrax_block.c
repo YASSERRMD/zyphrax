@@ -142,8 +142,8 @@ size_t zyphrax_compress_block(const uint8_t *src, size_t src_size, uint8_t *dst,
   zyphrax_build_huffman(&token_hf);
 
   // 4. Encode
-  // Header: [Type:1][OrigSize:4][Data...]
-  if (dst_cap < 5) {
+  // Header: [Type:1][OrigSize:4][CompSize:4][Data...]
+  if (dst_cap < 9) {
     free(seqs);
     return 0;
   }
@@ -153,16 +153,23 @@ size_t zyphrax_compress_block(const uint8_t *src, size_t src_size, uint8_t *dst,
   dst[2] = (uint8_t)((src_size >> 8) & 0xFF);
   dst[3] = (uint8_t)((src_size >> 16) & 0xFF);
   dst[4] = (uint8_t)((src_size >> 24) & 0xFF);
+  // CompSize will be written after encoding
 
-  size_t written = zyphrax_huffman_encode(seqs, seq_count, dst + 5, dst_cap - 5,
+  size_t written = zyphrax_huffman_encode(seqs, seq_count, dst + 9, dst_cap - 9,
                                           &lit_hf, &off_hf, &token_hf);
 
   free(seqs);
 
-  if (written == 0 || written + 5 >= src_size) {
+  if (written == 0 || written + 9 >= src_size) {
     // Fallback to raw
     return zyphrax_store_raw(src, src_size, dst, dst_cap);
   }
 
-  return written + 5;
+  // Write compressed size at offset 5
+  dst[5] = (uint8_t)(written & 0xFF);
+  dst[6] = (uint8_t)((written >> 8) & 0xFF);
+  dst[7] = (uint8_t)((written >> 16) & 0xFF);
+  dst[8] = (uint8_t)((written >> 24) & 0xFF);
+
+  return written + 9;
 }

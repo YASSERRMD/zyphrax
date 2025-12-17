@@ -211,23 +211,27 @@ Benchmarks measured on Apple M1 ARM64 (50MB data, 5 iterations):
 
 ### Compression (Single-Threaded)
 
-| Data Type          | Speed      | Ratio       |
-|--------------------|------------|-------------|
-| JSON (Large)       | 0.42 GB/s  |  9.9 : 1    |
-| Text (Large)       | 3.57 GB/s  | 63.1 : 1    |
-| Binary (Large)     | 0.07 GB/s  |  3.4 : 1    |
-| Random (Adversarial)| 0.07 GB/s |  1.0 : 1    |
-| JSON (4KB Blocks)  | 0.26 GB/s  |  4.9 : 1    |
+| Data Type            | Speed      | Ratio       |
+|----------------------|------------|-------------|
+| JSON (Large)         | 0.41 GB/s  |  9.9 : 1    |
+| Text (Large)         | 4.05 GB/s  | 62.9 : 1    |
+| Binary (Large)       | 0.07 GB/s  |  3.4 : 1    |
+| Random (Adversarial) | 0.08 GB/s  |  1.0 : 1    |
+| JSON (4KB Blocks)    | 0.24 GB/s  |  4.9 : 1    |
+
+### Decompression (Single-Threaded)
+
+| Data Type          | Speed      |
+|--------------------|------------|
+| JSON (Large)       | 0.99 GB/s  |
 
 ### Multi-threaded Scaling
 
 | Configuration      | Throughput  |
 |--------------------|-------------|
-| 4 Threads (JSON)   | 1.54 GB/s   |
+| 4 Threads (JSON)   | 1.29 GB/s   |
 
-> [!WARNING]
-> **Decompression is not yet functional.** The Huffman decoder is still under development.
-> Full round-trip support is planned for a future release.
+> **Note**: Performance varies by data type. Text data compresses extremely well (~63:1) due to high redundancy. Random data uses raw storage fallback (1:1 ratio) as expected.
 
 ---
 
