@@ -50,6 +50,23 @@ Run the PowerShell script (requires MinGW/GCC in PATH):
 
 This creates `zyphrax.dll`, `libzyphrax.a`, and `zyphrax.exe` in the project root.
 
+### Environment Setup
+
+After installation, ensure your system can find the shared library:
+
+**Linux**
+```bash
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+```
+
+**macOS**
+```bash
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:/usr/local/lib
+```
+
+**Windows**
+Add the directory containing `zyphrax.dll` to your System `PATH`, or keep the DLL in the same folder as your executable.
+
 ---
 
 ## Usage
