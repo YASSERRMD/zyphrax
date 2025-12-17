@@ -41,4 +41,5 @@ test: lib
 	./tests/test_decompress
 
 clean:
-	rm -f src/*.o libzyphrax.a zyphrax tests/test_*
+	rm -f src/*.o libzyphrax.a zyphrax
+	rm -f tests/test_header tests/test_lz77 tests/test_simd tests/test_tokens tests/test_huffman tests/test_block tests/test_api tests/test_decompress
