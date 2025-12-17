@@ -12,13 +12,12 @@ import { ref } from 'ref-napi'; // conceptual
 
 // const lib = Library('./libzyphrax', {
 //   'zyphrax_compress_bound': [ 'size_t', [ 'size_t' ] ],
-//   'zyphrax_compress': [ 'size_t', [ 'pointer', 'size_t', 'pointer', 'size_t', 'pointer' ] ]
+//   'zyphrax_compress': [ 'size_t', [ 'pointer', 'size_t', 'pointer', 'size_t', 'pointer' ] ],
+//   'zyphrax_decompress': [ 'size_t', [ 'pointer', 'size_t', 'pointer', 'size_t' ] ]
 // });
 
-// export function compress(data: Buffer): Buffer {
-//   // Implementation
-//   return Buffer.alloc(0);
-// }
+// export function compress(data: Buffer): Buffer { ... }
+// export function decompress(data: Buffer, dstCap: number = 0): Buffer { ... }
 
 console.log("TypeScript binding requires 'ffi-napi'. Please run 'npm install ffi-napi ref-napi ref-struct-napi'.");
 console.log("See bindings/typescript/README.md for details.");

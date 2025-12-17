@@ -55,6 +55,14 @@ _lib.zyphrax_compress.argtypes = [
 ]
 _lib.zyphrax_compress.restype = ctypes.c_size_t
 
+_lib.zyphrax_decompress.argtypes = [
+    ctypes.POINTER(ctypes.c_uint8), # src
+    ctypes.c_size_t,                # src_size
+    ctypes.POINTER(ctypes.c_uint8), # dst
+    ctypes.c_size_t                 # dst_cap
+]
+_lib.zyphrax_decompress.restype = ctypes.c_size_t
+
 # Wrapper
 def compress(data: bytes, level=3, block_size=65536) -> bytes:
     src_len = len(data)
@@ -79,3 +87,21 @@ def compress(data: bytes, level=3, block_size=65536) -> bytes:
         raise RuntimeError("Compression failed")
         
     return out_buf.raw[:encoded_size]
+
+def decompress(data: bytes, dst_cap: int = 0) -> bytes:
+    if dst_cap == 0:
+        # Estimation if not provided (safe bet usually)
+        dst_cap = len(data) * 10 
+        
+    src_len = len(data)
+    out_buf = ctypes.create_string_buffer(dst_cap)
+    
+    src_ptr = (ctypes.c_uint8 * src_len).from_buffer_copy(data)
+    dst_ptr = ctypes.cast(out_buf, ctypes.POINTER(ctypes.c_uint8))
+    
+    dec_size = _lib.zyphrax_decompress(src_ptr, src_len, dst_ptr, dst_cap)
+    
+    if dec_size == 0:
+        raise RuntimeError("Decompression failed")
+        
+    return out_buf.raw[:dec_size]

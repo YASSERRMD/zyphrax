@@ -79,7 +79,14 @@ void example() {
     );
 
     printf("Compressed size: %zu bytes\n", comp_size);
+    
+    // Decompress
+    size_t dec_bound = src_len; // Known size
+    uint8_t *dec = malloc(dec_bound);
+    size_t dec_size = zyphrax_decompress(dst, comp_size, dec, dec_bound);
+    
     free(dst);
+    free(dec);
 }
 ```
 
@@ -95,7 +102,7 @@ zyphrax = { path = "path/to/zyphrax" }
 ```
 
 ```rust
-use zyphrax::{compress, ZyphraxParams};
+use zyphrax::{compress, decompress, ZyphraxParams};
 
 fn main() {
     let data = b"Hello World";
@@ -109,17 +116,75 @@ fn main() {
     // Pass params by value
     let compressed = compress(data, Some(params));
     println!("Compressed size: {}", compressed.len());
+    
+    // Decompress
+    if let Some(original) = decompress(&compressed, data.len()) {
+        println!("Decompressed size: {}", original.len());
+    }
 }
 ```
 
 ---
 
-### Polyglot Bindings
+---
 
-- [Python](bindings/python/)
-- [Go](bindings/go/)
-- [C#](bindings/csharp/)
-- [TypeScript](bindings/typescript/)
+### Polyglot Usage
+
+#### Python
+
+```python
+import zyphrax
+
+data = b"Hello World"
+# Compress
+compressed = zyphrax.compress(data)
+# Decompress
+original = zyphrax.decompress(compressed)
+```
+
+#### Go
+
+```go
+package main
+
+import (
+    "fmt"
+    "zyphrax"
+)
+
+func main() {
+    data := []byte("Hello World")
+    // Compress
+    compressed, _ := zyphrax.Compress(data)
+    // Decompress
+    original, _ := zyphrax.Decompress(compressed, 0)
+    fmt.Printf("%s\n", original)
+}
+```
+
+#### C# (dotnet)
+
+```csharp
+using Zyphrax;
+
+byte[] data = System.Text.Encoding.UTF8.GetBytes("Hello World");
+// Compress
+byte[] compressed = Compressor.Compress(data);
+// Decompress
+byte[] original = Compressor.Decompress(compressed);
+```
+
+#### TypeScript (Node.js)
+
+```typescript
+import { compress, decompress } from './bindings/typescript/zyphrax';
+
+const data = Buffer.from("Hello World");
+// Compress
+const compressed = compress(data);
+// Decompress
+const original = decompress(compressed);
+```
 
 ---
 

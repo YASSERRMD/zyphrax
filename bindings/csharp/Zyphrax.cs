@@ -67,5 +67,46 @@ namespace Zyphrax
                 hDst.Free();
             }
         }
+
+        [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr zyphrax_decompress(
+            IntPtr src,
+            IntPtr srcSize,
+            IntPtr dst,
+            IntPtr dstCap
+        );
+
+        public static byte[] Decompress(byte[] data, int cap = 0)
+        {
+            if (data == null || data.Length == 0) return new byte[0];
+            if (cap == 0) cap = data.Length * 10;
+
+            byte[] buffer = new byte[cap];
+            
+            GCHandle hSrc = GCHandle.Alloc(data, GCHandleType.Pinned);
+            GCHandle hDst = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            
+            try
+            {
+                IntPtr res = zyphrax_decompress(
+                    hSrc.AddrOfPinnedObject(),
+                    (IntPtr)data.Length,
+                    hDst.AddrOfPinnedObject(),
+                    (IntPtr)cap
+                );
+                
+                int size = (int)res;
+                if (size == 0) throw new Exception("Decompression failed");
+                
+                byte[] ret = new byte[size];
+                Array.Copy(buffer, ret, size);
+                return ret;
+            }
+            finally
+            {
+                hSrc.Free();
+                hDst.Free();
+            }
+        }
     }
 }
