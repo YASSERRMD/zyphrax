@@ -207,7 +207,7 @@ const original = decompress(compressed);
 
 ## Performance (Synthetic Benchmarks, Single-Threaded)
 
-Timing measured using CPU-time over 5 iterations on 50 MB datasets (Apple M1 ARM64).
+Timing measured using CPU-time over 5 iterations on 50 MB datasets (Apple M4 ARM64).
 
 ### Compression
 
